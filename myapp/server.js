@@ -8,51 +8,47 @@ const cors = require("cors");
 
 const app = express();
 
-
-// ================= CORS (FINAL WORKING VERSION) =================
+// ================= CORS =================
 const allowedOrigins = [
+  "http://localhost:3000",
   "https://doctor-appointment-app-vuyl.vercel.app",
-  "http://localhost:3000"
+  "https://doctor-appointment-app-b7z8.vercel.app"
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin) return callback(null, true); // allow Postman/mobile
+    if (!origin) return callback(null, true); // Postman / mobile
 
     if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("CORS not allowed"));
+      return callback(null, true);
     }
+
+    console.log("❌ Blocked by CORS:", origin);
+    return callback(null, false);
   },
-  methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true
 }));
-
-
 
 // ================= MIDDLEWARE =================
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
+app.set("trust proxy", 1);
 
 // ================= MONGODB =================
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB Connected"))
-  .catch((err) => console.error("MongoDB Error:", err.message));
-
+  .then(() => console.log("✅ MongoDB Connected"))
+  .catch((err) => console.error("❌ MongoDB Error:", err.message));
 
 // ================= MODELS =================
 
 // USER
 const userSchema = new mongoose.Schema({
-  name: String,
-  email: { type: String, unique: true },
-  password: String,
+  name: { type: String, required: true },
+  email: { type: String, unique: true, required: true },
+  password: { type: String, required: true },
 }, { timestamps: true });
 
 const User = mongoose.model("User", userSchema);
-
 
 // DOCTOR
 const doctorSchema = new mongoose.Schema({
@@ -69,7 +65,6 @@ const doctorSchema = new mongoose.Schema({
 
 const Doctor = mongoose.model("Doctor", doctorSchema);
 
-
 // APPOINTMENT
 const appointmentSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
@@ -81,13 +76,12 @@ const appointmentSchema = new mongoose.Schema({
 
 const Appointment = mongoose.model("Appointment", appointmentSchema);
 
-
 // ================= AUTH MIDDLEWARE =================
 const authMiddleware = (req, res, next) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader) {
-    return res.status(401).json({ message: "No token provided" });
+    return res.status(401).json({ message: "Token missing" });
   }
 
   try {
@@ -101,34 +95,38 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
-
 // ================= TEST =================
 app.get("/", (req, res) => {
   res.send("Backend Running Successfully 🚀");
 });
-
 
 // ================= AUTH =================
 
 // REGISTER
 app.post("/api/register", async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    let { name, email, password } = req.body;
 
     if (!name || !email || !password) {
-      return res.status(400).json({ message: "All fields required" });
+      return res.status(400).json({
+        message: "All fields are required"
+      });
     }
 
-    const exists = await User.findOne({ email });
+    email = email.toLowerCase().trim();
 
-    if (exists) {
-      return res.status(400).json({ message: "User already exists" });
+    const existingUser = await User.findOne({ email });
+
+    if (existingUser) {
+      return res.status(400).json({
+        message: "User already exists"
+      });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = new User({
-      name,
+      name: name.trim(),
       email,
       password: hashedPassword
     });
@@ -147,22 +145,33 @@ app.post("/api/register", async (req, res) => {
   }
 });
 
-
 // LOGIN
 app.post("/api/login", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    let { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        message: "Email and password required"
+      });
+    }
+
+    email = email.toLowerCase().trim();
 
     const user = await User.findOne({ email });
 
     if (!user) {
-      return res.status(400).json({ message: "Invalid credentials" });
+      return res.status(400).json({
+        message: "Invalid credentials"
+      });
     }
 
-    const match = await bcrypt.compare(password, user.password);
+    const isMatch = await bcrypt.compare(password, user.password);
 
-    if (!match) {
-      return res.status(400).json({ message: "Invalid credentials" });
+    if (!isMatch) {
+      return res.status(400).json({
+        message: "Invalid credentials"
+      });
     }
 
     const token = jwt.sign(
@@ -173,7 +182,8 @@ app.post("/api/login", async (req, res) => {
 
     return res.json({
       message: "Login successful",
-      token
+      token,
+      userId: user._id
     });
 
   } catch (err) {
@@ -183,7 +193,6 @@ app.post("/api/login", async (req, res) => {
     });
   }
 });
-
 
 // ================= DOCTORS =================
 
@@ -198,7 +207,7 @@ app.post("/api/doctors", async (req, res) => {
   }
 });
 
-// GET
+// GET ALL
 app.get("/api/doctors", async (req, res) => {
   try {
     const doctors = await Doctor.find();
@@ -208,7 +217,6 @@ app.get("/api/doctors", async (req, res) => {
   }
 });
 
-
 // ================= APPOINTMENTS =================
 
 // BOOK
@@ -217,7 +225,6 @@ app.post("/api/appointments", authMiddleware, async (req, res) => {
     const { doctorId, date, time } = req.body;
 
     const newTime = new Date(`${date}T${time}`);
-
     const existing = await Appointment.find({ doctorId, date });
 
     for (let appt of existing) {
@@ -226,7 +233,7 @@ app.post("/api/appointments", authMiddleware, async (req, res) => {
 
       if (diff < 30) {
         return res.status(400).json({
-          message: "Slot already booked or within 30 mins gap"
+          message: "Slot already booked or within 30 minutes"
         });
       }
     }
@@ -250,7 +257,6 @@ app.post("/api/appointments", authMiddleware, async (req, res) => {
   }
 });
 
-
 // GET
 app.get("/api/appointments", authMiddleware, async (req, res) => {
   try {
@@ -262,7 +268,6 @@ app.get("/api/appointments", authMiddleware, async (req, res) => {
     res.status(500).json({ message: "Error fetching appointments" });
   }
 });
-
 
 // CANCEL
 app.delete("/api/appointments/:id", authMiddleware, async (req, res) => {
@@ -282,10 +287,15 @@ app.delete("/api/appointments/:id", authMiddleware, async (req, res) => {
   }
 });
 
+// ================= GLOBAL ERROR HANDLER =================
+app.use((err, req, res, next) => {
+  console.error("🔥 Server Error:", err.message);
+  res.status(500).json({ message: "Internal Server Error" });
+});
 
 // ================= SERVER =================
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log("Server running on port " + PORT);
+  console.log("🚀 Server running on port " + PORT);
 });
