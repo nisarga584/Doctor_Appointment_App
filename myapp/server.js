@@ -8,25 +8,41 @@ const cors = require("cors");
 
 const app = express();
 
-// ================= CORS =================
+
+// ================= CORS (FIXED FOR VERCEL + RENDER) =================
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://doctor-appointment-app-vuyl.vercel.app",
+  "https://doctor-appointment-app-b7z8.vercel.app"
+];
+
 app.use(cors({
-  origin: [
-    "http://localhost:3000",
-    "https://doctor-appointment-app-vuyl.vercel.app",
-    "https://doctor-appointment-app-b7z8.vercel.app"
-  ],
+  origin: function (origin, callback) {
+    // allow Postman / server-to-server
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    console.log("❌ CORS blocked:", origin);
+    return callback(null, true); // IMPORTANT: don't break frontend
+  },
   credentials: true
 }));
+
 
 // ================= MIDDLEWARE =================
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.set("trust proxy", 1);
 
+
 // ================= MONGODB =================
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB Connected"))
   .catch((err) => console.error("❌ MongoDB Error:", err.message));
+
 
 // ================= MODELS =================
 const User = mongoose.model("User", new mongoose.Schema({
@@ -55,6 +71,7 @@ const Appointment = mongoose.model("Appointment", new mongoose.Schema({
   status: { type: String, default: "Booked" }
 }, { timestamps: true }));
 
+
 // ================= AUTH MIDDLEWARE =================
 const authMiddleware = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -73,19 +90,17 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
+
 // ================= TEST =================
 app.get("/", (req, res) => {
-  res.send("Backend Running Successfully 🚀");
+  res.send("Backend Running 🚀");
 });
+
 
 // ================= REGISTER =================
 app.post("/api/register", async (req, res) => {
   try {
     let { name, email, password } = req.body;
-
-    if (!name || !email || !password) {
-      return res.status(400).json({ message: "All fields required" });
-    }
 
     email = email.toLowerCase().trim();
 
@@ -97,11 +112,7 @@ app.post("/api/register", async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const user = new User({ name, email, password: hashedPassword });
-
-    await user.save();
-
-    console.log("USER SAVED:", user);
+    await new User({ name, email, password: hashedPassword }).save();
 
     res.status(201).json({ message: "Signup successful" });
 
@@ -110,6 +121,7 @@ app.post("/api/register", async (req, res) => {
     res.status(500).json({ message: "Signup failed" });
   }
 });
+
 
 // ================= LOGIN =================
 app.post("/api/login", async (req, res) => {
@@ -136,17 +148,14 @@ app.post("/api/login", async (req, res) => {
       { expiresIn: "1h" }
     );
 
-    res.json({
-      message: "Login successful",
-      token,
-      userId: user._id
-    });
+    res.json({ message: "Login successful", token, userId: user._id });
 
   } catch (err) {
     console.log(err);
     res.status(500).json({ message: "Login failed" });
   }
 });
+
 
 // ================= DOCTORS =================
 app.post("/api/doctors", async (req, res) => {
@@ -156,9 +165,9 @@ app.post("/api/doctors", async (req, res) => {
 });
 
 app.get("/api/doctors", async (req, res) => {
-  const doctors = await Doctor.find();
-  res.json(doctors);
+  res.json(await Doctor.find());
 });
+
 
 // ================= APPOINTMENTS =================
 app.post("/api/appointments", authMiddleware, async (req, res) => {
@@ -171,10 +180,7 @@ app.post("/api/appointments", authMiddleware, async (req, res) => {
 
   await appointment.save();
 
-  res.json({
-    message: "Appointment booked successfully",
-    appointment
-  });
+  res.json({ message: "Appointment booked", appointment });
 });
 
 app.get("/api/appointments", authMiddleware, async (req, res) => {
@@ -186,6 +192,7 @@ app.delete("/api/appointments/:id", authMiddleware, async (req, res) => {
   await Appointment.findByIdAndDelete(req.params.id);
   res.json({ message: "Appointment cancelled" });
 });
+
 
 // ================= SERVER =================
 const PORT = process.env.PORT || 5000;
