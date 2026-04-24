@@ -1,199 +1,305 @@
-import React, { useState, useEffect } from "react";
-import axios from "axios";
-import Appointments from "./Appointments";
-import Signup from "./Signup";
+const express = require("express");
+const mongoose = require("mongoose");
+require("dotenv").config();
 
-const API = "https://doctor-appointment-app-86q7.onrender.com";
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const cors = require("cors");
 
-function App() {
-  const [token, setToken] = useState(localStorage.getItem("token") || "");
-  const [doctors, setDoctors] = useState([]);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showSignup, setShowSignup] = useState(false);
+const app = express();
 
-  // ================= LOGIN =================
-  const handleLogin = async () => {
-    try {
-      const res = await axios.post(`${API}/api/login`, {
-        email,
-        password,
-      });
 
-      localStorage.setItem("token", res.data.token);
-      setToken(res.data.token);
-      alert("Login successful");
-    } catch (err) {
-      console.log(err);
-      alert("Login failed");
-    }
-  };
+// ================= CORS =================
+app.use(cors({
+  origin: [
+    "https://doctor-appointment-app-b7z8.vercel.app",
+    "http://localhost:5000"
+  ],
+  credentials: true
+}));
 
-  // ================= LOGOUT =================
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    setToken("");
-  };
 
-  // ================= FETCH DOCTORS =================
-  const fetchDoctors = async () => {
-    try {
-      const res = await axios.get(`${API}/api/doctors`);
-      setDoctors(res.data);
-    } catch (err) {
-      console.log("Error fetching doctors:", err);
-    }
-  };
+// ================= MIDDLEWARE =================
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-  // ================= BOOK APPOINTMENT =================
-  const handleBook = async (doc) => {
-    try {
-      const date = prompt("Enter date (YYYY-MM-DD):");
-      if (!date) return;
 
-      const selectedDay = new Date(date).toLocaleString("en-US", {
-        weekday: "short",
-      });
+// ================= MONGODB =================
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log("MongoDB Connected"))
+  .catch((err) => {
+    console.error("MongoDB connection error:", err.message);
+  });
 
-      if (!doc.availability?.days?.includes(selectedDay)) {
-        alert(`Doctor is NOT available on ${selectedDay}`);
-        return;
-      }
 
-      const time = prompt("Enter time (HH:MM):");
-      if (!time) return;
+// ================= MODELS =================
 
-      const [h, m] = time.split(":").map(Number);
-      const userMinutes = h * 60 + m;
+// USER
+const userSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  email: { type: String, unique: true, required: true },
+  password: { type: String, required: true },
+}, { timestamps: true });
 
-      const convertToMinutes = (t) => {
-        let [timePart, modifier] = t.split(" ");
-        let [hours, minutes] = timePart.split(":").map(Number);
+const User = mongoose.model("User", userSchema);
 
-        if (modifier === "PM" && hours !== 12) hours += 12;
-        if (modifier === "AM" && hours === 12) hours = 0;
 
-        return hours * 60 + minutes;
-      };
+// DOCTOR
+const doctorSchema = new mongoose.Schema({
+  name: String,
+  specialization: String,
+  experience: Number,
+  fees: Number,
+  availability: {
+    days: [String],
+    startTime: String,
+    endTime: String
+  }
+}, { timestamps: true });
 
-      const start = convertToMinutes(doc.availability.startTime);
-      const end = convertToMinutes(doc.availability.endTime);
+const Doctor = mongoose.model("Doctor", doctorSchema);
 
-      if (userMinutes < start || userMinutes > end) {
-        alert("Time outside doctor's availability");
-        return;
-      }
 
-      await axios.post(
-        `${API}/api/appointments`,
-        { doctorId: doc._id, date, time },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+// APPOINTMENT
+const appointmentSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  doctorId: { type: mongoose.Schema.Types.ObjectId, ref: "Doctor" },
+  date: String,
+  time: String,
+  status: { type: String, default: "Booked" }
+}, { timestamps: true });
 
-      alert("Appointment booked successfully");
-    } catch (err) {
-      console.log(err);
-      alert(err.response?.data?.message || "Error booking");
-    }
-  };
+const Appointment = mongoose.model("Appointment", appointmentSchema);
 
-  // ================= EFFECT =================
-  useEffect(() => {
-    if (token) {
-      fetchDoctors();
-    }
-  }, [token]);
 
-  // ================= SIGNUP PAGE =================
-  if (showSignup) {
-    return (
-      <div style={{ padding: 20 }}>
-        <button onClick={() => setShowSignup(false)}>← Back to Login</button>
-        <Signup API={API} />
-      </div>
-    );
+// ================= AUTH MIDDLEWARE =================
+const authMiddleware = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    return res.status(401).json({ message: "Token missing" });
   }
 
-  // ================= LOGIN PAGE =================
-  if (!token) {
-    return (
-      <div style={{ padding: 20 }}>
-        <h2>Login</h2>
+  try {
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-        <input
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <br /><br />
-
-        <input
-          placeholder="Password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        <br /><br />
-
-        <button onClick={handleLogin}>Login</button>
-
-        <br /><br />
-
-        <button onClick={() => setShowSignup(true)}>
-          Create New Account
-        </button>
-      </div>
-    );
+    req.user = decoded;
+    next();
+  } catch (err) {
+    return res.status(401).json({ message: "Invalid token" });
   }
+};
 
-  // ================= MAIN APP =================
-  return (
-    <div style={{ padding: 20 }}>
-      <h1>Doctor Appointment App</h1>
 
-      <button onClick={handleLogout}>Logout</button>
+// ================= TEST =================
+app.get("/", (req, res) => {
+  res.send("Backend Running Successfully 🚀");
+});
 
-      <h2>Doctors</h2>
 
-      {doctors.length === 0 ? (
-        <p>Loading doctors...</p>
-      ) : (
-        doctors.map((doc) => (
-          <div
-            key={doc._id}
-            style={{
-              border: "1px solid gray",
-              padding: "10px",
-              marginBottom: "10px",
-            }}
-          >
-            <h3>{doc.name}</h3>
-            <p>{doc.specialization} - ₹{doc.fees}</p>
+// ================= AUTH =================
 
-            <p>
-              <b>Available Days:</b>{" "}
-              {doc.availability?.days?.join(", ") || "Not set"}
-            </p>
+// SIGNUP
+app.post("/api/register", async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
 
-            <p>
-              <b>Time:</b>{" "}
-              {doc.availability?.startTime} - {doc.availability?.endTime}
-            </p>
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        message: "All fields are required"
+      });
+    }
 
-            <button onClick={() => handleBook(doc)}>Book</button>
-          </div>
-        ))
-      )}
+    const existingUser = await User.findOne({ email });
 
-      <hr />
+    if (existingUser) {
+      return res.status(400).json({
+        message: "User already exists"
+      });
+    }
 
-      <Appointments API={API} token={token} />
-    </div>
-  );
-}
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-export default App;
+    const user = new User({
+      name,
+      email,
+      password: hashedPassword
+    });
+
+    await user.save();
+
+    return res.status(201).json({
+      message: "Signup successful"
+    });
+
+  } catch (err) {
+    console.error("Signup error:", err.message);
+    return res.status(500).json({
+      message: "Signup failed",
+      error: err.message
+    });
+  }
+});
+
+
+// LOGIN
+app.post("/api/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        message: "Email and password required"
+      });
+    }
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(400).json({
+        message: "Invalid credentials"
+      });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+
+    if (!isMatch) {
+      return res.status(400).json({
+        message: "Invalid credentials"
+      });
+    }
+
+    const token = jwt.sign(
+      { id: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" }
+    );
+
+    return res.json({
+      message: "Login successful",
+      token
+    });
+
+  } catch (err) {
+    console.error("Login error:", err.message);
+    return res.status(500).json({
+      message: "Login failed",
+      error: err.message
+    });
+  }
+});
+
+
+// ================= DOCTORS =================
+app.post("/api/doctors", async (req, res) => {
+  try {
+    const doctor = new Doctor(req.body);
+    await doctor.save();
+    res.json(doctor);
+  } catch (err) {
+    res.status(500).json({ message: "Error adding doctor" });
+  }
+});
+
+app.get("/api/doctors", async (req, res) => {
+  try {
+    const doctors = await Doctor.find();
+    res.json(doctors);
+  } catch (err) {
+    res.status(500).json({ message: "Error fetching doctors" });
+  }
+});
+
+
+// ================= APPOINTMENTS =================
+
+// BOOK
+app.post("/api/appointments", authMiddleware, async (req, res) => {
+  try {
+    const { doctorId, date, time } = req.body;
+
+    const newTime = new Date(`${date}T${time}`);
+
+    const existing = await Appointment.find({ doctorId, date });
+
+    for (let appt of existing) {
+      const oldTime = new Date(`${appt.date}T${appt.time}`);
+      const diff = Math.abs((newTime - oldTime) / (1000 * 60));
+
+      if (diff < 30) {
+        return res.status(400).json({
+          message: "Slot already booked or within 30 minutes"
+        });
+      }
+    }
+
+    const appointment = new Appointment({
+      userId: req.user.id,
+      doctorId,
+      date,
+      time
+    });
+
+    await appointment.save();
+
+    res.json({
+      message: "Appointment booked successfully",
+      appointment
+    });
+
+  } catch (err) {
+    res.status(500).json({
+      message: "Booking failed",
+      error: err.message
+    });
+  }
+});
+
+
+// GET APPOINTMENTS
+app.get("/api/appointments", authMiddleware, async (req, res) => {
+  try {
+    const data = await Appointment.find({ userId: req.user.id })
+      .populate("doctorId");
+
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({
+      message: "Error fetching appointments"
+    });
+  }
+});
+
+
+// CANCEL
+app.delete("/api/appointments/:id", authMiddleware, async (req, res) => {
+  try {
+    const appt = await Appointment.findById(req.params.id);
+
+    if (!appt || appt.userId.toString() !== req.user.id) {
+      return res.status(403).json({
+        message: "Unauthorized"
+      });
+    }
+
+    await Appointment.findByIdAndDelete(req.params.id);
+
+    res.json({
+      message: "Appointment cancelled"
+    });
+
+  } catch (err) {
+    res.status(500).json({
+      message: "Cancel failed"
+    });
+  }
+});
+
+
+// ================= SERVER =================
+const PORT = process.env.PORT || 5000;
+
+app.listen(PORT, () => {
+  console.log("Server running on port " + PORT);
+});
