@@ -12,9 +12,10 @@ const app = express();
 // ================= CORS FIX (IMPORTANT) =================
 const allowedOrigins = [
   "http://localhost:3000",
+  "https://doctor-appointment-app-topaz-tau.vercel.app",
   "https://doctor-appointment-app-vuyl.vercel.app",
-  "https://doctor-appointment-app-b7z8.vercel.app",
-  "https://doctor-appointment-app-topaz-tau.vercel.app"
+  "https://doctor-appointment-app-b7z8.vercel.app"
+  
 ];
 
 const corsOptions = {
@@ -34,7 +35,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions)); // 🔥 IMPORTANT FOR REGISTER
+app.options(/.*/, cors(corsOptions)); // 🔥 IMPORTANT FOR REGISTER
 
 
 // ================= MIDDLEWARE =================
