@@ -9,13 +9,12 @@ const cors = require("cors");
 const app = express();
 
 
-// ================= CORS FIX (IMPORTANT) =================
+// ================= CORS FIX =================
 const allowedOrigins = [
   "http://localhost:3000",
   "https://doctor-appointment-app-topaz-tau.vercel.app",
   "https://doctor-appointment-app-vuyl.vercel.app",
   "https://doctor-appointment-app-b7z8.vercel.app"
-  
 ];
 
 const corsOptions = {
@@ -35,7 +34,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options(/.*/, cors(corsOptions)); // 🔥 IMPORTANT FOR REGISTER
+app.options(/.*/, cors(corsOptions));
 
 
 // ================= MIDDLEWARE =================
@@ -68,7 +67,8 @@ const Appointment = mongoose.model("Appointment", new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   doctorId: { type: mongoose.Schema.Types.ObjectId, ref: "Doctor" },
   date: String,
-  time: String
+  time: String,
+  status: { type: String, default: "Booked" }
 }, { timestamps: true }));
 
 
@@ -112,12 +112,12 @@ app.post("/api/register", async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    await new User({ name, email, password: hashedPassword }).save();
+    await User.create({ name, email, password: hashedPassword });
 
     res.status(201).json({ message: "Signup successful" });
 
   } catch (err) {
-    console.log("REGISTER ERROR:", err);
+    console.log(err);
     res.status(500).json({ message: "Signup failed" });
   }
 });
@@ -155,7 +155,7 @@ app.post("/api/login", async (req, res) => {
     });
 
   } catch (err) {
-    console.log("LOGIN ERROR:", err);
+    console.log(err);
     res.status(500).json({ message: "Login failed" });
   }
 });
@@ -172,23 +172,60 @@ app.post("/api/doctors", async (req, res) => {
 });
 
 
-// ================= APPOINTMENTS =================
+// ================= APPOINTMENTS (FIXED LOGIC) =================
 app.post("/api/appointments", authMiddleware, async (req, res) => {
-  const appointment = await Appointment.create({
-    userId: req.user.id,
-    doctorId: req.body.doctorId,
-    date: req.body.date,
-    time: req.body.time
-  });
+  try {
+    const { doctorId, date, time } = req.body;
 
-  res.json({ message: "Booked", appointment });
+    const newTime = new Date(`${date}T${time}`);
+
+    const existing = await Appointment.find({ doctorId, date });
+
+    for (let appt of existing) {
+      const oldTime = new Date(`${appt.date}T${appt.time}`);
+
+      const diff = Math.abs((newTime - oldTime) / (1000 * 60));
+
+      // same time
+      if (diff === 0) {
+        return res.status(400).json({ message: "Slot already booked" });
+      }
+
+      // 30 min rule
+      if (diff < 30) {
+        return res.status(400).json({
+          message: "Minimum 30 minutes gap required"
+        });
+      }
+    }
+
+    const appointment = await Appointment.create({
+      userId: req.user.id,
+      doctorId,
+      date,
+      time,
+      status: "Booked"
+    });
+
+    res.json({
+      message: "Appointment booked successfully",
+      appointment
+    });
+
+  } catch (err) {
+    res.status(500).json({ message: "Booking failed" });
+  }
 });
 
+
+// ================= GET APPOINTMENTS =================
 app.get("/api/appointments", authMiddleware, async (req, res) => {
   const data = await Appointment.find({ userId: req.user.id }).populate("doctorId");
   res.json(data);
 });
 
+
+// ================= CANCEL =================
 app.delete("/api/appointments/:id", authMiddleware, async (req, res) => {
   await Appointment.findByIdAndDelete(req.params.id);
   res.json({ message: "Cancelled" });
