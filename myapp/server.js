@@ -9,16 +9,16 @@ const cors = require("cors");
 const app = express();
 
 
-// ================= CORS (FIXED FOR VERCEL + RENDER) =================
+// ================= CORS FIX (IMPORTANT) =================
 const allowedOrigins = [
   "http://localhost:3000",
   "https://doctor-appointment-app-vuyl.vercel.app",
-  "https://doctor-appointment-app-b7z8.vercel.app"
+  "https://doctor-appointment-app-b7z8.vercel.app",
+  "https://doctor-appointment-app-topaz-tau.vercel.app"
 ];
 
-app.use(cors({
+const corsOptions = {
   origin: function (origin, callback) {
-    // allow Postman / server-to-server
     if (!origin) return callback(null, true);
 
     if (allowedOrigins.includes(origin)) {
@@ -26,10 +26,15 @@ app.use(cors({
     }
 
     console.log("❌ CORS blocked:", origin);
-    return callback(null, true); // IMPORTANT: don't break frontend
+    return callback(null, false);
   },
-  credentials: true
-}));
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions)); // 🔥 IMPORTANT FOR REGISTER
 
 
 // ================= MIDDLEWARE =================
@@ -38,10 +43,10 @@ app.use(express.urlencoded({ extended: true }));
 app.set("trust proxy", 1);
 
 
-// ================= MONGODB =================
+// ================= DB =================
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB Connected"))
-  .catch((err) => console.error("❌ MongoDB Error:", err.message));
+  .catch((err) => console.log("❌ Mongo Error:", err.message));
 
 
 // ================= MODELS =================
@@ -55,24 +60,18 @@ const Doctor = mongoose.model("Doctor", new mongoose.Schema({
   name: String,
   specialization: String,
   experience: Number,
-  fees: Number,
-  availability: {
-    days: [String],
-    startTime: String,
-    endTime: String
-  }
+  fees: Number
 }, { timestamps: true }));
 
 const Appointment = mongoose.model("Appointment", new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   doctorId: { type: mongoose.Schema.Types.ObjectId, ref: "Doctor" },
   date: String,
-  time: String,
-  status: { type: String, default: "Booked" }
+  time: String
 }, { timestamps: true }));
 
 
-// ================= AUTH MIDDLEWARE =================
+// ================= AUTH =================
 const authMiddleware = (req, res, next) => {
   const authHeader = req.headers.authorization;
 
@@ -117,7 +116,7 @@ app.post("/api/register", async (req, res) => {
     res.status(201).json({ message: "Signup successful" });
 
   } catch (err) {
-    console.log(err);
+    console.log("REGISTER ERROR:", err);
     res.status(500).json({ message: "Signup failed" });
   }
 });
@@ -148,39 +147,40 @@ app.post("/api/login", async (req, res) => {
       { expiresIn: "1h" }
     );
 
-    res.json({ message: "Login successful", token, userId: user._id });
+    res.json({
+      message: "Login successful",
+      token,
+      userId: user._id
+    });
 
   } catch (err) {
-    console.log(err);
+    console.log("LOGIN ERROR:", err);
     res.status(500).json({ message: "Login failed" });
   }
 });
 
 
 // ================= DOCTORS =================
-app.post("/api/doctors", async (req, res) => {
-  const doctor = new Doctor(req.body);
-  await doctor.save();
-  res.json(doctor);
-});
-
 app.get("/api/doctors", async (req, res) => {
   res.json(await Doctor.find());
+});
+
+app.post("/api/doctors", async (req, res) => {
+  const doctor = await Doctor.create(req.body);
+  res.json(doctor);
 });
 
 
 // ================= APPOINTMENTS =================
 app.post("/api/appointments", authMiddleware, async (req, res) => {
-  const appointment = new Appointment({
+  const appointment = await Appointment.create({
     userId: req.user.id,
     doctorId: req.body.doctorId,
     date: req.body.date,
     time: req.body.time
   });
 
-  await appointment.save();
-
-  res.json({ message: "Appointment booked", appointment });
+  res.json({ message: "Booked", appointment });
 });
 
 app.get("/api/appointments", authMiddleware, async (req, res) => {
@@ -190,7 +190,7 @@ app.get("/api/appointments", authMiddleware, async (req, res) => {
 
 app.delete("/api/appointments/:id", authMiddleware, async (req, res) => {
   await Appointment.findByIdAndDelete(req.params.id);
-  res.json({ message: "Appointment cancelled" });
+  res.json({ message: "Cancelled" });
 });
 
 
