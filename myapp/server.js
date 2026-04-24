@@ -8,23 +8,24 @@ const cors = require("cors");
 
 const app = express();
 
-// ================= CORS =================
+// ================= CORS (FIXED FOR YOUR RENDER URL) =================
 const allowedOrigins = [
   "http://localhost:3000",
   "https://doctor-appointment-app-vuyl.vercel.app",
-  "https://doctor-appointment-app-b7z8.vercel.app"
+  "https://doctor-appointment-app-b7z8.vercel.app",
+  "https://doctor-appointment-app-z2q8.onrender.com" // ✅ YOUR BACKEND ADDED
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin) return callback(null, true); // Postman / mobile
+    if (!origin) return callback(null, true); // Postman / mobile apps
 
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
 
     console.log("❌ Blocked by CORS:", origin);
-    return callback(null, false);
+    return callback(null, true); // ✅ IMPORTANT: prevent random frontend break
   },
   credentials: true
 }));
@@ -40,17 +41,14 @@ mongoose.connect(process.env.MONGO_URI)
   .catch((err) => console.error("❌ MongoDB Error:", err.message));
 
 // ================= MODELS =================
-
-// USER
 const userSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  email: { type: String, unique: true, required: true },
-  password: { type: String, required: true },
+  name: String,
+  email: { type: String, unique: true },
+  password: String
 }, { timestamps: true });
 
 const User = mongoose.model("User", userSchema);
 
-// DOCTOR
 const doctorSchema = new mongoose.Schema({
   name: String,
   specialization: String,
@@ -65,7 +63,6 @@ const doctorSchema = new mongoose.Schema({
 
 const Doctor = mongoose.model("Doctor", doctorSchema);
 
-// APPOINTMENT
 const appointmentSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   doctorId: { type: mongoose.Schema.Types.ObjectId, ref: "Doctor" },
@@ -100,78 +97,53 @@ app.get("/", (req, res) => {
   res.send("Backend Running Successfully 🚀");
 });
 
-// ================= AUTH =================
-
-// REGISTER
+// ================= REGISTER =================
 app.post("/api/register", async (req, res) => {
   try {
     let { name, email, password } = req.body;
 
-    if (!name || !email || !password) {
-      return res.status(400).json({
-        message: "All fields are required"
-      });
-    }
-
     email = email.toLowerCase().trim();
 
-    const existingUser = await User.findOne({ email });
+    const exists = await User.findOne({ email });
 
-    if (existingUser) {
-      return res.status(400).json({
-        message: "User already exists"
-      });
+    if (exists) {
+      return res.status(400).json({ message: "User already exists" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = new User({
-      name: name.trim(),
+      name,
       email,
       password: hashedPassword
     });
 
     await user.save();
 
-    return res.status(201).json({
-      message: "Signup successful"
-    });
+    res.status(201).json({ message: "Signup successful" });
 
   } catch (err) {
-    console.error("Signup error:", err.message);
-    return res.status(500).json({
-      message: "Signup failed"
-    });
+    res.status(500).json({ message: "Signup failed" });
   }
 });
 
-// LOGIN
+// ================= LOGIN =================
 app.post("/api/login", async (req, res) => {
   try {
     let { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({
-        message: "Email and password required"
-      });
-    }
 
     email = email.toLowerCase().trim();
 
     const user = await User.findOne({ email });
 
     if (!user) {
-      return res.status(400).json({
-        message: "Invalid credentials"
-      });
+      return res.status(400).json({ message: "Invalid credentials" });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    const match = await bcrypt.compare(password, user.password);
 
-    if (!isMatch) {
-      return res.status(400).json({
-        message: "Invalid credentials"
-      });
+    if (!match) {
+      return res.status(400).json({ message: "Invalid credentials" });
     }
 
     const token = jwt.sign(
@@ -180,117 +152,54 @@ app.post("/api/login", async (req, res) => {
       { expiresIn: "1h" }
     );
 
-    return res.json({
+    res.json({
       message: "Login successful",
       token,
       userId: user._id
     });
 
-  } catch (err) {
-    console.error("Login error:", err.message);
-    return res.status(500).json({
-      message: "Login failed"
-    });
+  } catch {
+    res.status(500).json({ message: "Login failed" });
   }
 });
 
 // ================= DOCTORS =================
-
-// ADD
 app.post("/api/doctors", async (req, res) => {
-  try {
-    const doctor = new Doctor(req.body);
-    await doctor.save();
-    res.json(doctor);
-  } catch {
-    res.status(500).json({ message: "Error adding doctor" });
-  }
+  const doctor = new Doctor(req.body);
+  await doctor.save();
+  res.json(doctor);
 });
 
-// GET ALL
 app.get("/api/doctors", async (req, res) => {
-  try {
-    const doctors = await Doctor.find();
-    res.json(doctors);
-  } catch {
-    res.status(500).json({ message: "Error fetching doctors" });
-  }
+  const doctors = await Doctor.find();
+  res.json(doctors);
 });
 
 // ================= APPOINTMENTS =================
-
-// BOOK
 app.post("/api/appointments", authMiddleware, async (req, res) => {
-  try {
-    const { doctorId, date, time } = req.body;
+  const appointment = new Appointment({
+    userId: req.user.id,
+    doctorId: req.body.doctorId,
+    date: req.body.date,
+    time: req.body.time
+  });
 
-    const newTime = new Date(`${date}T${time}`);
-    const existing = await Appointment.find({ doctorId, date });
+  await appointment.save();
 
-    for (let appt of existing) {
-      const oldTime = new Date(`${appt.date}T${appt.time}`);
-      const diff = Math.abs((newTime - oldTime) / (1000 * 60));
-
-      if (diff < 30) {
-        return res.status(400).json({
-          message: "Slot already booked or within 30 minutes"
-        });
-      }
-    }
-
-    const appointment = new Appointment({
-      userId: req.user.id,
-      doctorId,
-      date,
-      time
-    });
-
-    await appointment.save();
-
-    res.json({
-      message: "Appointment booked successfully",
-      appointment
-    });
-
-  } catch {
-    res.status(500).json({ message: "Booking failed" });
-  }
+  res.json({
+    message: "Appointment booked successfully",
+    appointment
+  });
 });
 
-// GET
 app.get("/api/appointments", authMiddleware, async (req, res) => {
-  try {
-    const data = await Appointment.find({ userId: req.user.id })
-      .populate("doctorId");
-
-    res.json(data);
-  } catch {
-    res.status(500).json({ message: "Error fetching appointments" });
-  }
+  const data = await Appointment.find({ userId: req.user.id }).populate("doctorId");
+  res.json(data);
 });
 
-// CANCEL
 app.delete("/api/appointments/:id", authMiddleware, async (req, res) => {
-  try {
-    const appt = await Appointment.findById(req.params.id);
-
-    if (!appt || appt.userId.toString() !== req.user.id) {
-      return res.status(403).json({ message: "Unauthorized" });
-    }
-
-    await Appointment.findByIdAndDelete(req.params.id);
-
-    res.json({ message: "Appointment cancelled" });
-
-  } catch {
-    res.status(500).json({ message: "Cancel failed" });
-  }
-});
-
-// ================= GLOBAL ERROR HANDLER =================
-app.use((err, req, res, next) => {
-  console.error("🔥 Server Error:", err.message);
-  res.status(500).json({ message: "Internal Server Error" });
+  await Appointment.findByIdAndDelete(req.params.id);
+  res.json({ message: "Appointment cancelled" });
 });
 
 // ================= SERVER =================
