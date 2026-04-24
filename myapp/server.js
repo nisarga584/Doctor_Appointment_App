@@ -8,25 +8,13 @@ const cors = require("cors");
 
 const app = express();
 
-// ================= CORS (FIXED FOR YOUR RENDER URL) =================
-const allowedOrigins = [
-  "http://localhost:3000",
-  "https://doctor-appointment-app-vuyl.vercel.app",
-  "https://doctor-appointment-app-b7z8.vercel.app",
-  "https://doctor-appointment-app-z2q8.onrender.com" // ✅ YOUR BACKEND ADDED
-];
-
+// ================= CORS =================
 app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin) return callback(null, true); // Postman / mobile apps
-
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-
-    console.log("❌ Blocked by CORS:", origin);
-    return callback(null, true); // ✅ IMPORTANT: prevent random frontend break
-  },
+  origin: [
+    "http://localhost:3000",
+    "https://doctor-appointment-app-vuyl.vercel.app",
+    "https://doctor-appointment-app-b7z8.vercel.app"
+  ],
   credentials: true
 }));
 
@@ -41,15 +29,13 @@ mongoose.connect(process.env.MONGO_URI)
   .catch((err) => console.error("❌ MongoDB Error:", err.message));
 
 // ================= MODELS =================
-const userSchema = new mongoose.Schema({
+const User = mongoose.model("User", new mongoose.Schema({
   name: String,
   email: { type: String, unique: true },
   password: String
-}, { timestamps: true });
+}, { timestamps: true }));
 
-const User = mongoose.model("User", userSchema);
-
-const doctorSchema = new mongoose.Schema({
+const Doctor = mongoose.model("Doctor", new mongoose.Schema({
   name: String,
   specialization: String,
   experience: Number,
@@ -59,19 +45,15 @@ const doctorSchema = new mongoose.Schema({
     startTime: String,
     endTime: String
   }
-}, { timestamps: true });
+}, { timestamps: true }));
 
-const Doctor = mongoose.model("Doctor", doctorSchema);
-
-const appointmentSchema = new mongoose.Schema({
+const Appointment = mongoose.model("Appointment", new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   doctorId: { type: mongoose.Schema.Types.ObjectId, ref: "Doctor" },
   date: String,
   time: String,
   status: { type: String, default: "Booked" }
-}, { timestamps: true });
-
-const Appointment = mongoose.model("Appointment", appointmentSchema);
+}, { timestamps: true }));
 
 // ================= AUTH MIDDLEWARE =================
 const authMiddleware = (req, res, next) => {
@@ -84,10 +66,9 @@ const authMiddleware = (req, res, next) => {
   try {
     const token = authHeader.split(" ")[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
     req.user = decoded;
     next();
-  } catch (err) {
+  } catch {
     return res.status(401).json({ message: "Invalid token" });
   }
 };
@@ -102,6 +83,10 @@ app.post("/api/register", async (req, res) => {
   try {
     let { name, email, password } = req.body;
 
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: "All fields required" });
+    }
+
     email = email.toLowerCase().trim();
 
     const exists = await User.findOne({ email });
@@ -112,17 +97,16 @@ app.post("/api/register", async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const user = new User({
-      name,
-      email,
-      password: hashedPassword
-    });
+    const user = new User({ name, email, password: hashedPassword });
 
     await user.save();
+
+    console.log("USER SAVED:", user);
 
     res.status(201).json({ message: "Signup successful" });
 
   } catch (err) {
+    console.log(err);
     res.status(500).json({ message: "Signup failed" });
   }
 });
@@ -158,7 +142,8 @@ app.post("/api/login", async (req, res) => {
       userId: user._id
     });
 
-  } catch {
+  } catch (err) {
+    console.log(err);
     res.status(500).json({ message: "Login failed" });
   }
 });

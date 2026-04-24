@@ -1,7 +1,11 @@
 import React, { useState } from "react";
 import axios from "axios";
 
-const API = "https://doctor-appointment-app-86q7.onrender.com";
+// ✅ FIXED API (NO SPACES)
+const API =
+  window.location.hostname === "localhost"
+    ? "http://localhost:5000"
+    : "https://doctor-appointment-app-z2q8.onrender.com";
 
 function Login() {
   const [email, setEmail] = useState("");
@@ -14,28 +18,21 @@ function Login() {
         return;
       }
 
-      const formattedEmail = email.toLowerCase().trim();
-
-      const res = await axios.post(
-        `${API}/api/login`,
-        {
-          email: formattedEmail,
-          password
-        }
-      );
+      const res = await axios.post(`${API}/api/login`, {
+        email: email.toLowerCase().trim(),
+        password
+      });
 
       localStorage.setItem("token", res.data.token);
 
       alert("Login Successful");
 
-    } catch (err) {
-      console.error("Login error:", err);
+      window.location.reload();
 
-      if (err.response && err.response.data.message) {
-        alert(err.response.data.message);
-      } else {
-        alert("Server error");
-      }
+    } catch (err) {
+      console.log("LOGIN ERROR:", err.response?.data);
+
+      alert(err.response?.data?.message || "Login failed");
     }
   };
 
@@ -46,12 +43,14 @@ function Login() {
       <input
         type="email"
         placeholder="Enter Email"
+        value={email}
         onChange={(e) => setEmail(e.target.value)}
       /><br /><br />
 
       <input
         type="password"
         placeholder="Enter Password"
+        value={password}
         onChange={(e) => setPassword(e.target.value)}
       /><br /><br />
 
