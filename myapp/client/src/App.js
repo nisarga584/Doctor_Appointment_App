@@ -3,7 +3,7 @@ import axios from "axios";
 import Appointments from "./Appointments";
 import Signup from "./Signup";
 
-const API = "https://doctor-appointment-app-86q7.onrender.com";
+const API = "https://doctor-appointment-app-z2q8.onrender.com";
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem("token") || "");
