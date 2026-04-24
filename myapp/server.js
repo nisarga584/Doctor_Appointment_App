@@ -9,17 +9,28 @@ const cors = require("cors");
 const app = express();
 
 
-// ================= CORS (FIXED FOR VERCEL + RENDER) =================
+// ================= CORS (FINAL WORKING VERSION) =================
+const allowedOrigins = [
+  "https://doctor-appointment-app-vuyl.vercel.app",
+  "http://localhost:3000"
+];
+
 app.use(cors({
-  origin: [
-    "https://doctor-appointment-app-vuyl.vercel.app",
-    "http://localhost:3000"
-  ],
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true); // allow Postman/mobile
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("CORS not allowed"));
+    }
+  },
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true
 }));
 
-// ❌ DO NOT use app.options("*", cors()); → causes crash in Express 5
+// Handle preflight requests
+app.options("/*", cors());
 
 
 // ================= MIDDLEWARE =================
@@ -93,7 +104,7 @@ const authMiddleware = (req, res, next) => {
 };
 
 
-// ================= TEST ROUTE =================
+// ================= TEST =================
 app.get("/", (req, res) => {
   res.send("Backend Running Successfully 🚀");
 });
@@ -177,6 +188,8 @@ app.post("/api/login", async (req, res) => {
 
 
 // ================= DOCTORS =================
+
+// ADD
 app.post("/api/doctors", async (req, res) => {
   try {
     const doctor = new Doctor(req.body);
@@ -187,6 +200,7 @@ app.post("/api/doctors", async (req, res) => {
   }
 });
 
+// GET
 app.get("/api/doctors", async (req, res) => {
   try {
     const doctors = await Doctor.find();
@@ -239,7 +253,7 @@ app.post("/api/appointments", authMiddleware, async (req, res) => {
 });
 
 
-// GET APPOINTMENTS
+// GET
 app.get("/api/appointments", authMiddleware, async (req, res) => {
   try {
     const data = await Appointment.find({ userId: req.user.id })
