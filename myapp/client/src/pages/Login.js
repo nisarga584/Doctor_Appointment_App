@@ -7,17 +7,38 @@ function Login() {
 
   const handleLogin = async () => {
     try {
-      const res = await axios.post("http://localhost:5000/api/login", {
-        email,
-        password
-      });
+      // ✅ validation
+      if (!email || !password) {
+        alert("Please enter email and password");
+        return;
+      }
 
-      // store token
+      // ✅ normalize email
+      const formattedEmail = email.toLowerCase().trim();
+
+      // ✅ IMPORTANT: change URL if deployed
+      const res = await axios.post(
+        "http://localhost:5000/api/login",
+        {
+          email: formattedEmail,
+          password
+        }
+      );
+
+      // ✅ store token
       localStorage.setItem("token", res.data.token);
 
       alert("Login Successful");
+
     } catch (err) {
-      alert("Login Failed");
+      console.error("Login error:", err);
+
+      // ✅ show real backend message
+      if (err.response && err.response.data.message) {
+        alert(err.response.data.message);
+      } else {
+        alert("Server error");
+      }
     }
   };
 
