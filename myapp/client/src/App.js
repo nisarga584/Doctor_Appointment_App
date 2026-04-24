@@ -11,21 +11,25 @@ function App() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showSignup, setShowSignup] = useState(false);
+  const [refreshAppointments, setRefreshAppointments] = useState(false);
 
   // ================= LOGIN =================
   const handleLogin = async () => {
     try {
       const res = await axios.post(`${API}/api/login`, {
-        email,
+        email: email.toLowerCase().trim(),
         password,
       });
 
-      localStorage.setItem("token", res.data.token);
-      setToken(res.data.token);
+      const newToken = res.data.token;
+
+      localStorage.setItem("token", newToken);
+      setToken(newToken);
+
       alert("Login successful");
     } catch (err) {
-      console.log(err);
-      alert("Login failed");
+      console.log("LOGIN ERROR:", err.response?.data || err.message);
+      alert(err.response?.data?.message || "Login failed");
     }
   };
 
@@ -33,6 +37,7 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem("token");
     setToken("");
+    setDoctors([]);
   };
 
   // ================= FETCH DOCTORS =================
@@ -41,7 +46,7 @@ function App() {
       const res = await axios.get(`${API}/api/doctors`);
       setDoctors(res.data);
     } catch (err) {
-      console.log("Error fetching doctors:", err);
+      console.log("Doctor fetch error:", err.message);
     }
   };
 
@@ -56,37 +61,20 @@ function App() {
       });
 
       if (!doc.availability?.days?.includes(selectedDay)) {
-        alert(`Doctor is NOT available on ${selectedDay}`);
+        alert(`Doctor not available on ${selectedDay}`);
         return;
       }
 
-      const time = prompt("Enter time (HH:MM):");
+      const time = prompt("Enter time (HH:MM)");
       if (!time) return;
-
-      const [h, m] = time.split(":").map(Number);
-      const userMinutes = h * 60 + m;
-
-      const convertToMinutes = (t) => {
-        let [timePart, modifier] = t.split(" ");
-        let [hours, minutes] = timePart.split(":").map(Number);
-
-        if (modifier === "PM" && hours !== 12) hours += 12;
-        if (modifier === "AM" && hours === 12) hours = 0;
-
-        return hours * 60 + minutes;
-      };
-
-      const start = convertToMinutes(doc.availability.startTime);
-      const end = convertToMinutes(doc.availability.endTime);
-
-      if (userMinutes < start || userMinutes > end) {
-        alert("Time outside doctor's availability");
-        return;
-      }
 
       await axios.post(
         `${API}/api/appointments`,
-        { doctorId: doc._id, date, time },
+        {
+          doctorId: doc._id,
+          date,
+          time,
+        },
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -95,24 +83,26 @@ function App() {
       );
 
       alert("Appointment booked successfully");
+
+      // 🔥 IMPORTANT: refresh appointments instantly
+      setRefreshAppointments((prev) => !prev);
+
     } catch (err) {
-      console.log(err);
-      alert(err.response?.data?.message || "Error booking");
+      console.log("BOOK ERROR:", err.response?.data || err.message);
+      alert(err.response?.data?.message || "Booking failed");
     }
   };
 
-  // ================= EFFECT =================
+  // ================= LOAD DOCTORS =================
   useEffect(() => {
-    if (token) {
-      fetchDoctors();
-    }
+    if (token) fetchDoctors();
   }, [token]);
 
-  // ================= SIGNUP PAGE =================
+  // ================= SIGNUP =================
   if (showSignup) {
     return (
       <div style={{ padding: 20 }}>
-        <button onClick={() => setShowSignup(false)}>← Back to Login</button>
+        <button onClick={() => setShowSignup(false)}>← Back</button>
         <Signup API={API} />
       </div>
     );
@@ -144,7 +134,7 @@ function App() {
         <br /><br />
 
         <button onClick={() => setShowSignup(true)}>
-          Create New Account
+          Create Account
         </button>
       </div>
     );
@@ -160,23 +150,25 @@ function App() {
       <h2>Doctors</h2>
 
       {doctors.length === 0 ? (
-        <p>Loading doctors...</p>
+        <p>No doctors found</p>
       ) : (
         doctors.map((doc) => (
           <div
             key={doc._id}
             style={{
               border: "1px solid gray",
-              padding: "10px",
-              marginBottom: "10px",
+              padding: 10,
+              marginBottom: 10,
             }}
           >
             <h3>{doc.name}</h3>
-            <p>{doc.specialization} - ₹{doc.fees}</p>
+            <p>
+              {doc.specialization} - ₹{doc.fees}
+            </p>
 
             <p>
-              <b>Available Days:</b>{" "}
-              {doc.availability?.days?.join(", ") || "Not set"}
+              <b>Days:</b>{" "}
+              {doc.availability?.days?.join(", ") || "N/A"}
             </p>
 
             <p>
@@ -191,7 +183,12 @@ function App() {
 
       <hr />
 
-      <Appointments API={API} token={token} />
+      {/* 🔥 KEY FIX: refresh trigger passed */}
+      <Appointments
+        API={API}
+        token={token}
+        refresh={refreshAppointments}
+      />
     </div>
   );
 }
