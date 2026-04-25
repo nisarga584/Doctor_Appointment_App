@@ -128,18 +128,31 @@ app.post("/api/login", async (req, res) => {
   try {
     let { email, password } = req.body;
 
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password required" });
+    }
+
     email = email.toLowerCase().trim();
+
+    // 🔍 DEBUG: check request
+    console.log("Login attempt:", email);
 
     const user = await User.findOne({ email });
 
+    // 🔍 DEBUG: check if user exists
+    console.log("User found:", user);
+
     if (!user) {
-      return res.status(400).json({ message: "Invalid credentials" });
+      return res.status(400).json({ message: "User not found. Please signup." });
     }
 
     const match = await bcrypt.compare(password, user.password);
 
+    // 🔍 DEBUG: password match result
+    console.log("Password match:", match);
+
     if (!match) {
-      return res.status(400).json({ message: "Invalid credentials" });
+      return res.status(400).json({ message: "Incorrect password" });
     }
 
     const token = jwt.sign(
@@ -155,20 +168,9 @@ app.post("/api/login", async (req, res) => {
     });
 
   } catch (err) {
-    console.log(err);
+    console.log("Login error:", err);
     res.status(500).json({ message: "Login failed" });
   }
-});
-
-
-// ================= DOCTORS =================
-app.get("/api/doctors", async (req, res) => {
-  res.json(await Doctor.find());
-});
-
-app.post("/api/doctors", async (req, res) => {
-  const doctor = await Doctor.create(req.body);
-  res.json(doctor);
 });
 
 
