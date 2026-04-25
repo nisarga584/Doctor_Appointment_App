@@ -218,7 +218,11 @@ app.post("/api/appointments", authMiddleware, async (req, res) => {
     res.status(500).json({ message: "Booking failed" });
   }
 });
-
+app.get("/api/doctors", async (req, res) => {
+  const doctors = await Doctor.find();
+  console.log("Doctors from DB:", doctors); // 👈 ADD THIS
+  res.json(doctors);
+});
 
 // ================= GET APPOINTMENTS =================
 app.get("/api/appointments", authMiddleware, async (req, res) => {
