@@ -88,4 +88,6 @@ Author
  GitHub:https://github.com/nisarga584
  GitHub:https://github.com/vishruthamj
 
+License 
+ This Project is licensed under the MIT License
 
