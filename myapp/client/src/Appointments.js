@@ -1,48 +1,95 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 
-const Appointments = () => {
+// ✅ ADD THIS (MAIN FIX)
+const API = "https://doctor-appointment-app-z2q8.onrender.com";
+
+function Appointments({ token }) {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  // Fetch appointments
+  // ================= FETCH APPOINTMENTS =================
   const fetchAppointments = async () => {
     try {
-      const token = localStorage.getItem("token");
-      const res = await axios.get("http://localhost:5000/api/appointments", {
-        headers: { Authorization: `Bearer ${token}` },
+      setLoading(true);
+      setError("");
+
+      const storedToken = token || localStorage.getItem("token");
+
+      const res = await axios.get(`${API}/api/appointments`, {
+        headers: {
+          Authorization: `Bearer ${storedToken}`,
+        },
       });
+
+      console.log("Appointments:", res.data);
+
       setAppointments(res.data);
-      setLoading(false);
     } catch (error) {
-      console.log("Error fetching appointments:", error);
+      console.log("Fetch error:", error?.response?.data || error.message);
+
+      setError(
+        error?.response?.data?.message ||
+        "Failed to load appointments"
+      );
+    } finally {
       setLoading(false);
     }
   };
 
-  // Cancel appointment
+  // ================= CANCEL APPOINTMENT =================
   const handleCancel = async (id) => {
     try {
-      const token = localStorage.getItem("token");
-      await axios.delete(`http://localhost:5000/api/appointments/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
+      setError("");
+
+      const storedToken = token || localStorage.getItem("token");
+
+      await axios.delete(`${API}/api/appointments/${id}`, {
+        headers: {
+          Authorization: `Bearer ${storedToken}`,
+        },
       });
-      alert("Appointment cancelled ✅");
-      setAppointments((prev) => prev.filter((appt) => appt._id !== id));
+
+      setAppointments((prev) =>
+        prev.filter((appt) => appt._id !== id)
+      );
+
+      alert("Appointment cancelled");
+
     } catch (error) {
-      console.log("Error cancelling appointment:", error);
+      console.log("Cancel error:", error?.response?.data || error.message);
+
+      setError(
+        error?.response?.data?.message ||
+        "Failed to cancel appointment"
+      );
     }
   };
 
+  // ================= LOAD DATA =================
   useEffect(() => {
-    fetchAppointments();
-  }, []);
+    const storedToken = token || localStorage.getItem("token");
 
+    if (storedToken) {
+      fetchAppointments();
+    } else {
+      setAppointments([]);
+      setLoading(false);
+    }
+  }, [token]);
+
+  // ================= UI =================
   return (
     <div style={{ padding: 20 }}>
       <h2>My Appointments</h2>
-      {loading ? (
+
+      {!token && !localStorage.getItem("token") ? (
+        <p>Please login to view appointments</p>
+      ) : loading ? (
         <p>Loading...</p>
+      ) : error ? (
+        <p style={{ color: "red" }}>{error}</p>
       ) : appointments.length === 0 ? (
         <p>No appointments found</p>
       ) : (
@@ -56,11 +103,12 @@ const Appointments = () => {
               borderRadius: "8px",
             }}
           >
-            <p><strong>Doctor:</strong> {appt.doctorId?.name}</p>
-            <p><strong>Specialization:</strong> {appt.doctorId?.specialization}</p>
+            <p><strong>Doctor:</strong> {appt.doctorId?.name || "N/A"}</p>
+            <p><strong>Specialization:</strong> {appt.doctorId?.specialization || "N/A"}</p>
             <p><strong>Date:</strong> {appt.date}</p>
             <p><strong>Time:</strong> {appt.time}</p>
             <p><strong>Status:</strong> {appt.status}</p>
+
             <button
               onClick={() => handleCancel(appt._id)}
               style={{
@@ -79,6 +127,6 @@ const Appointments = () => {
       )}
     </div>
   );
-};
+}
 
 export default Appointments;
