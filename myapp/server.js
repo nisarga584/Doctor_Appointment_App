@@ -9,7 +9,7 @@ const cors = require("cors");
 const app = express();
 
 
-// ================= CORS FIX =================
+// ================= CORS CONFIG (FIXED) =================
 const allowedOrigins = [
   "http://localhost:3000",
   "https://doctor-appointment-app-topaz-tau.vercel.app",
@@ -19,6 +19,7 @@ const allowedOrigins = [
 
 const corsOptions = {
   origin: function (origin, callback) {
+    // Allow mobile apps / server-to-server / Postman
     if (!origin) return callback(null, true);
 
     if (allowedOrigins.includes(origin)) {
@@ -26,18 +27,20 @@ const corsOptions = {
     }
 
     console.log("❌ CORS blocked:", origin);
-    return callback(null, false);
+    return callback(new Error("Not allowed by CORS"));
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
 };
 
-app.use(cors(corsOptions));
-app.options(/.*/, cors(corsOptions));
-
 
 // ================= MIDDLEWARE =================
+app.use(cors(corsOptions));
+
+// IMPORTANT: handle preflight requests properly
+app.options("*", cors(corsOptions));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.set("trust proxy", 1);
@@ -91,7 +94,7 @@ const authMiddleware = (req, res, next) => {
 };
 
 
-// ================= TEST =================
+// ================= TEST ROUTE =================
 app.get("/", (req, res) => {
   res.send("Backend Running 🚀");
 });
@@ -134,22 +137,13 @@ app.post("/api/login", async (req, res) => {
 
     email = email.toLowerCase().trim();
 
-    // 🔍 DEBUG: check request
-    console.log("Login attempt:", email);
-
     const user = await User.findOne({ email });
 
-    // 🔍 DEBUG: check if user exists
-    console.log("User found:", user);
-
     if (!user) {
-      return res.status(400).json({ message: "User not found. Please signup." });
+      return res.status(400).json({ message: "User not found" });
     }
 
     const match = await bcrypt.compare(password, user.password);
-
-    // 🔍 DEBUG: password match result
-    console.log("Password match:", match);
 
     if (!match) {
       return res.status(400).json({ message: "Incorrect password" });
@@ -168,38 +162,28 @@ app.post("/api/login", async (req, res) => {
     });
 
   } catch (err) {
-    console.log("Login error:", err);
+    console.log(err);
     res.status(500).json({ message: "Login failed" });
   }
 });
 
 
-// ================= APPOINTMENTS (FIXED LOGIC) =================
+// ================= DOCTORS =================
+app.get("/api/doctors", async (req, res) => {
+  try {
+    const doctors = await Doctor.find();
+    console.log("Doctors from DB:", doctors);
+    res.json(doctors);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch doctors" });
+  }
+});
+
+
+// ================= APPOINTMENTS =================
 app.post("/api/appointments", authMiddleware, async (req, res) => {
   try {
     const { doctorId, date, time } = req.body;
-
-    const newTime = new Date(`${date}T${time}`);
-
-    const existing = await Appointment.find({ doctorId, date });
-
-    for (let appt of existing) {
-      const oldTime = new Date(`${appt.date}T${appt.time}`);
-
-      const diff = Math.abs((newTime - oldTime) / (1000 * 60));
-
-      // same time
-      if (diff === 0) {
-        return res.status(400).json({ message: "Slot already booked" });
-      }
-
-      // 30 min rule
-      if (diff < 30) {
-        return res.status(400).json({
-          message: "Minimum 30 minutes gap required"
-        });
-      }
-    }
 
     const appointment = await Appointment.create({
       userId: req.user.id,
@@ -218,23 +202,29 @@ app.post("/api/appointments", authMiddleware, async (req, res) => {
     res.status(500).json({ message: "Booking failed" });
   }
 });
-app.get("/api/doctors", async (req, res) => {
-  const doctors = await Doctor.find();
-  console.log("Doctors from DB:", doctors); // 👈 ADD THIS
-  res.json(doctors);
-});
+
 
 // ================= GET APPOINTMENTS =================
 app.get("/api/appointments", authMiddleware, async (req, res) => {
-  const data = await Appointment.find({ userId: req.user.id }).populate("doctorId");
-  res.json(data);
+  try {
+    const data = await Appointment.find({ userId: req.user.id })
+      .populate("doctorId");
+
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch appointments" });
+  }
 });
 
 
 // ================= CANCEL =================
 app.delete("/api/appointments/:id", authMiddleware, async (req, res) => {
-  await Appointment.findByIdAndDelete(req.params.id);
-  res.json({ message: "Cancelled" });
+  try {
+    await Appointment.findByIdAndDelete(req.params.id);
+    res.json({ message: "Cancelled" });
+  } catch (err) {
+    res.status(500).json({ message: "Cancel failed" });
+  }
 });
 
 
