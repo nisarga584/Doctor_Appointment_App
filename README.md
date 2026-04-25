@@ -79,4 +79,13 @@ Future Enhancements
   Online payment Integration
   Video Consultation
   Doctor dashboard
-  
+  AI-based health suggestions
+  Notifications and reminders
+
+Author 
+ Name 1:Vishrutha M J
+ Name 2:Nisarga T A
+ GitHub:https://github.com/nisarga584
+ GitHub:https://github.com/vishruthamj
+
+
