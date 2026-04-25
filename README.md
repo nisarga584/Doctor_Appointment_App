@@ -1,70 +1,82 @@
-# Getting Started with Create React App
+Project Overview
+The Doctor Appointment Booking System is a full-stack web application developed using the MERN stack. It allows users to register, log in and book appointments with doctors easily and efficiently. The system digitizes the traditional appointment process and provides a seamless user experience.
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+ Features
+    User Registration and Login
+    Doctor Listing (optional / if implemented)
+    Appointment Booking
+    View Appointments
+    Authentication (Basic / Token-based)
+    Cloud Database (MongoDB Atlas)
+    Fully Deployed Application
 
-## Available Scripts
+Tech Stack
+  Frontend:
+    React.js
+    Axios
+    HTML, CSS
+  Backend:
+    Node.js
+    Express.js
+  Database:
+    MongoDB Atlas
 
-In the project directory, you can run:
+Tools & Deployment:
+  VS Code
+  Postman
+  GitHub
+  Render (Backend Deployment)
+  Vercel (Frontend Deployment)
 
-### `npm start`
+Project Structure
+  doctor-appointment-app/
+  │
+  ├── frontend/        # React frontend
+  │   ├── src/
+  │   └── public/
+  │
+  ├── backend/         # Node + Express backend
+  │   ├── models/
+  │   ├── routes/
+  │   └── server.js
+  │
+  └── README.md
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+Installation & Setup
+  1. Clone the repository
+    git clone https://github.com/your-username/doctor-appointment-app.git
+  2. Navigate to project folder
+    cd doctor-appointment-app
+  3. Install dependencies
+    Frontend:
+      cd frontend
+      npm install
+    Backend:
+      cd backend
+      npm install
+  4.Setup Environment Variables
+    Create a .env file in backend folder:
+      MONGO_URI=your_mongodb_connection_string
+      PORT=5000
+  5. Run the application
+     Backend:
+      npm start
+     Frontend:
+      npm start
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+Deployment
+  Frontend: Deployed on Vercel
+  Backend: Deployed on Render
 
-### `npm test`
+Screenshots
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
 
-### `npm run build`
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+Objective
+  The main objective of this project is to provide an efficient and user-friendly platform for booking doctor appointments, reducing manual effort and improving healthcare accessibility.
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
-
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
-
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
-
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+Future Enhancements
+  Online payment Integration
+  Video Consultation
+  Doctor dashboard
+  
