@@ -3,22 +3,23 @@ const router = express.Router();
 const bcrypt = require("bcryptjs");
 const User = require("../models/User");
 
-// POST /api/register
+//REGISTER 
 router.post("/register", async (req, res) => {
   try {
     let { name, email, password } = req.body;
 
-    // ✅ 1. Check missing fields
+    // Validate fields
     if (!name || !email || !password) {
       return res.status(400).json({
         message: "All fields are required"
       });
     }
 
-    // ✅ 2. Normalize email
+    //Normalize input
+    name = name.trim();
     email = email.toLowerCase().trim();
 
-    // ✅ 3. Check if user exists
+    //Check existing user
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({
@@ -26,29 +27,27 @@ router.post("/register", async (req, res) => {
       });
     }
 
-    // ✅ 4. Hash password
+    //Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // ✅ 5. Create user
+    //Save user
     const user = new User({
-      name: name.trim(),
+      name,
       email,
-      password: hashedPassword,
+      password: hashedPassword
     });
-
     await user.save();
 
-    // ✅ 6. Success response
+    //Response
     return res.status(201).json({
       message: "User registered successfully"
     });
 
   } catch (err) {
-    console.error("Register error:", err);
+    console.error("Register error:", err.message);
     return res.status(500).json({
       message: "Server error"
     });
   }
 });
-
 module.exports = router;

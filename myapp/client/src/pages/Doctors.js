@@ -1,15 +1,11 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-
-// ✅ AUTO SWITCH API (LOCAL + PRODUCTION)
 const API =
   window.location.hostname === "localhost"
     ? "http://localhost:5000"
     : " https://doctor-appointment-app-z2q8.onrender.com";
-
 function Doctors() {
   const [doctors, setDoctors] = useState([]);
-
   useEffect(() => {
     const fetchDoctors = async () => {
       try {
@@ -19,20 +15,17 @@ function Doctors() {
         console.log("Error fetching doctors:", err);
       }
     };
-
     fetchDoctors();
   }, []);
 
-  // ✅ BOOK APPOINTMENT
+  //BOOK APPOINTMENT
   const bookAppointment = async (doctorId) => {
     try {
       const token = localStorage.getItem("token");
-
       if (!token) {
         alert("Please login first");
         return;
       }
-
       const res = await axios.post(
         `${API}/api/appointments`,
         {
@@ -46,18 +39,15 @@ function Doctors() {
           }
         }
       );
-
       alert(res.data.message || "Appointment Booked");
     } catch (err) {
       console.log("Booking error:", err);
       alert(err.response?.data?.message || "Booking Failed");
     }
   };
-
   return (
     <div>
       <h2>Doctors List</h2>
-
       {doctors.length === 0 ? (
         <p>No doctors available</p>
       ) : (
@@ -74,7 +64,6 @@ function Doctors() {
             <p>Specialization: {doc.specialization}</p>
             <p>Experience: {doc.experience} years</p>
             <p>Fees: ₹{doc.fees}</p>
-
             <button onClick={() => bookAppointment(doc._id)}>
               Book Appointment
             </button>
@@ -84,5 +73,4 @@ function Doctors() {
     </div>
   );
 }
-
 export default Doctors;

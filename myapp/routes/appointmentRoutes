@@ -1,6 +1,5 @@
 import express from "express";
 import Appointment from "../models/Appointment.js";
-
 const router = express.Router();
 
 // BOOK APPOINTMENT
@@ -12,14 +11,11 @@ router.post("/book", async (req, res) => {
       date: req.body.date,
       time: req.body.time
     });
-
     if (exists) {
       return res.status(400).json({ message: "Slot already booked" });
     }
-
     const appointment = new Appointment(req.body);
     await appointment.save();
-
     res.json({ message: "Appointment booked", appointment });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -30,8 +26,6 @@ router.post("/book", async (req, res) => {
 router.get("/user/:userId", async (req, res) => {
   const appointments = await Appointment.find({ userId: req.params.userId })
     .populate("doctorId");
-
   res.json(appointments);
 });
-
 export default router;
