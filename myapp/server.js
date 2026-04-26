@@ -4,10 +4,9 @@ require("dotenv").config();
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const cors = require("cors");
-
 const app = express();
 
-// ================= CORS CONFIG =================
+// CORS CONFIG 
 const allowedOrigins = [
   "http://localhost:3000",
   "https://doctor-appointment-app-topaz-tau.vercel.app",
@@ -29,17 +28,16 @@ const corsOptions = {
   allowedHeaders: ["Content-Type", "Authorization"]
 };
 
-// ================= MIDDLEWARE =================
+//MIDDLEWARE 
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// ================= DB =================
+//DB
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected"))
   .catch((err) => console.log("Mongo Error:", err.message));
 
-// ================= MODELS =================
+//MODELS 
 const User = mongoose.model("User", new mongoose.Schema({
   name: String,
   email: { type: String, unique: true },
@@ -51,8 +49,8 @@ const Doctor = mongoose.model("Doctor", new mongoose.Schema({
   specialization: String,
   experience: Number,
   fees: Number,
-  startTime: String,   // e.g. "9 AM"
-  endTime: String      // e.g. "5 PM"
+  startTime: String,   
+  endTime: String     
 }));
 
 const Appointment = mongoose.model("Appointment", new mongoose.Schema({
@@ -63,14 +61,12 @@ const Appointment = mongoose.model("Appointment", new mongoose.Schema({
   status: { type: String, default: "Booked" }
 }));
 
-// ================= AUTH =================
+// AUTH 
 const authMiddleware = (req, res, next) => {
   const authHeader = req.headers.authorization;
-
   if (!authHeader) {
     return res.status(401).json({ message: "Token missing" });
   }
-
   try {
     const token = authHeader.split(" ")[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -81,101 +77,81 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
-// ================= TEST =================
+//TEST 
 app.get("/", (req, res) => {
   res.send("Backend Running");
 });
 
-// ================= REGISTER =================
+//REGISTER 
 app.post("/api/register", async (req, res) => {
   try {
     let { name, email, password } = req.body;
     email = email.toLowerCase().trim();
-
     const exists = await User.findOne({ email });
     if (exists) {
       return res.status(400).json({ message: "User already exists" });
     }
-
     const hashedPassword = await bcrypt.hash(password, 10);
     await User.create({ name, email, password: hashedPassword });
-
     res.status(201).json({ message: "Signup successful" });
-
   } catch {
     res.status(500).json({ message: "Signup failed" });
   }
 });
 
-// ================= LOGIN =================
+//LOGIN 
 app.post("/api/login", async (req, res) => {
   try {
     let { email, password } = req.body;
-
     email = email.toLowerCase().trim();
     const user = await User.findOne({ email });
-
     if (!user) return res.status(400).json({ message: "User not found" });
-
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.status(400).json({ message: "Incorrect password" });
-
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
       expiresIn: "1h"
     });
-
     res.json({ message: "Login successful", token, userId: user._id });
-
   } catch {
     res.status(500).json({ message: "Login failed" });
   }
 });
 
-// ================= GET DOCTORS =================
+//GET DOCTORS 
 app.get("/api/doctors", async (req, res) => {
   const doctors = await Doctor.find();
   res.json(doctors);
 });
 
-// ================= HELPER FUNCTION =================
+//HELPER FUNCTION
 function convertToMinutes(time) {
   if (!time || typeof time !== "string") return null;
-
   time = time.trim();
-
   if (time.includes("AM") || time.includes("PM")) {
     let [t, modifier] = time.split(" ");
     let [h, m] = t.includes(":") ? t.split(":") : [t, "00"];
-
     let hours = parseInt(h);
     let minutes = parseInt(m);
-
     if (modifier === "PM" && hours !== 12) hours += 12;
     if (modifier === "AM" && hours === 12) hours = 0;
-
     return hours * 60 + minutes;
   }
-
   if (time.includes(":")) {
     let [h, m] = time.split(":");
     return parseInt(h) * 60 + parseInt(m);
   }
-
   return parseInt(time) * 60;
 }
 
-// ================= BOOK APPOINTMENT =================
+// BOOK APPOINTMENT
 app.post("/api/appointments", authMiddleware, async (req, res) => {
   try {
     const { doctorId, date, time } = req.body;
-
     if (!time) {
       return res.status(400).json({ message: "Invalid time selected" });
     }
-
-    // ✅ Normalize time
+    //Normalize time
     let formattedTime = time.trim();
-
     if (!formattedTime.includes(":") && !formattedTime.includes("AM") && !formattedTime.includes("PM")) {
       let hour = parseInt(formattedTime);
       formattedTime = hour >= 12 ? `${hour}:00 PM` : `${hour}:00 AM`;
@@ -185,33 +161,30 @@ app.post("/api/appointments", authMiddleware, async (req, res) => {
       formattedTime = hour >= 12 ? `${hour}:${m} PM` : `${hour}:${m} AM`;
     }
 
-    // ✅ Prevent past date
+    //Prevent past date
     const selectedDate = new Date(date);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     selectedDate.setHours(0, 0, 0, 0);
-
     if (selectedDate < today) {
       return res.status(400).json({ message: "Cannot book past dates" });
     }
 
-    // ✅ Check doctor
+    //Check doctor
     const doctor = await Doctor.findById(doctorId);
     if (!doctor) {
       return res.status(404).json({ message: "Doctor not found" });
     }
 
-    // ✅ Convert times
+    //Convert times
     const bookingTime = convertToMinutes(formattedTime);
     let startTime = convertToMinutes(doctor.startTime || "9 AM");
     let endTime = convertToMinutes(doctor.endTime || "5 PM");
 
-    // ================= STEP 1: SLOT CHECK =================
+    //SLOT CHECK
     const appointments = await Appointment.find({ doctorId, date });
-
     for (let appt of appointments) {
       const existing = convertToMinutes(appt.time);
-
       if (Math.abs(existing - bookingTime) < 30) {
         return res.status(400).json({
           message: "Slot has already been booked, try different timing"
@@ -219,14 +192,14 @@ app.post("/api/appointments", authMiddleware, async (req, res) => {
       }
     }
 
-    // ================= STEP 2: AVAILABILITY =================
+    //AVAILABILITY 
     if (bookingTime < startTime || bookingTime >= endTime) {
       return res.status(400).json({
         message: "Doctor is unavailable at this time"
       });
     }
 
-    // ================= CREATE =================
+    //CREATE
     const appointment = await Appointment.create({
       userId: req.user.id,
       doctorId,
@@ -234,32 +207,30 @@ app.post("/api/appointments", authMiddleware, async (req, res) => {
       time: formattedTime,
       status: "Booked"
     });
-
     res.json({
       message: "Appointment booked successfully",
       appointment
     });
-
   } catch (err) {
     console.log(err);
     res.status(500).json({ message: "Booking failed" });
   }
 });
 
-// ================= GET APPOINTMENTS =================
+//GET APPOINTMENTS
 app.get("/api/appointments", authMiddleware, async (req, res) => {
   const data = await Appointment.find({ userId: req.user.id })
     .populate("doctorId");
   res.json(data);
 });
 
-// ================= CANCEL =================
+//CANCEL
 app.delete("/api/appointments/:id", authMiddleware, async (req, res) => {
   await Appointment.findByIdAndDelete(req.params.id);
   res.json({ message: "Cancelled" });
 });
 
-// ================= SERVER =================
+//SERVER 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log("Server running on port " + PORT);
