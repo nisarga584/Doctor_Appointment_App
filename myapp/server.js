@@ -51,7 +51,7 @@ const Doctor = mongoose.model("Doctor", new mongoose.Schema({
   specialization: String,
   experience: Number,
   fees: Number
-  // startTime & endTime will come dynamically from DB
+  // startTime & endTime stored in DB
 }));
 
 const Appointment = mongoose.model("Appointment", new mongoose.Schema({
@@ -178,7 +178,24 @@ app.post("/api/appointments", authMiddleware, async (req, res) => {
       return res.status(404).json({ message: "Doctor not found" });
     }
 
-    // ❗ FIX: Handle N/A timing
+    // ================= STEP 1: CHECK SLOT FIRST =================
+    const appointments = await Appointment.find({ doctorId, date });
+
+    for (let appt of appointments) {
+      const existing = convertToMinutes(appt.time);
+      const newTime = convertToMinutes(time);
+
+      const diff = Math.abs(existing - newTime);
+
+      if (diff < 30) {
+        return res.status(400).json({
+          message: "Slot has already been booked, try different timing"
+        });
+      }
+    }
+
+    // ================= STEP 2: CHECK DOCTOR AVAILABILITY =================
+
     if (!doctor.startTime || !doctor.endTime) {
       return res.status(400).json({
         message: "Doctor is unavailable at this time"
@@ -189,42 +206,13 @@ app.post("/api/appointments", authMiddleware, async (req, res) => {
     const startTime = convertToMinutes(doctor.startTime);
     const endTime = convertToMinutes(doctor.endTime);
 
-    // ❗ FIX: Doctor availability message
     if (bookingTime < startTime || bookingTime >= endTime) {
       return res.status(400).json({
         message: "Doctor is unavailable at this time"
       });
     }
 
-    // ❗ FIX: 30-minute rule message
-    const appointments = await Appointment.find({ doctorId, date });
-    Appointment.find({doctorId,date});
-    for (let appt of appointments) {
-      const existing = convertToMinutes(appt.time);
-      const diff = Math.abs(existing - convertToMinutes(time));
-
-      if (diff < 30) {
-        return res.status(400).json({
-          message: "Slot has already been booked, try different timing"
-        });
-      }
-    }
-    if (!doctor.startTime || !doctor.endTime) {
-  return res.status(400).json({
-    message: "Doctor is unavailable at this time"
-  });
-}
-
-const bookingTime = convertToMinutes(time);
-const startTime = convertToMinutes(doctor.startTime);
-const endTime = convertToMinutes(doctor.endTime);
-
-if (bookingTime < startTime || bookingTime >= endTime) {
-  return res.status(400).json({
-    message: "Doctor is unavailable at this time"
-  });
-}
-    //Create appointment
+    // ================= CREATE APPOINTMENT =================
     const appointment = await Appointment.create({
       userId: req.user.id,
       doctorId,
