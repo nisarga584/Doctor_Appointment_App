@@ -51,7 +51,6 @@ const Doctor = mongoose.model("Doctor", new mongoose.Schema({
   specialization: String,
   experience: Number,
   fees: Number
-  // startTime & endTime stored in DB
 }));
 
 const Appointment = mongoose.model("Appointment", new mongoose.Schema({
@@ -138,6 +137,8 @@ app.get("/api/doctors", async (req, res) => {
 
 // ================= HELPER FUNCTION =================
 function convertToMinutes(time) {
+  if (!time) return null;
+
   if (time.includes("AM") || time.includes("PM")) {
     let [t, modifier] = time.split(" ");
     let [h, m] = t.split(":");
@@ -160,7 +161,13 @@ app.post("/api/appointments", authMiddleware, async (req, res) => {
   try {
     const { doctorId, date, time } = req.body;
 
-    //Prevent past date
+    // 🔥 FIX: normalize time format
+    let formattedTime = time;
+    if (!time.includes("AM") && !time.includes("PM")) {
+      let hour = parseInt(time.split(":")[0]);
+      formattedTime = hour >= 12 ? time + " PM" : time + " AM";
+    }
+
     const selectedDate = new Date(date);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -172,37 +179,33 @@ app.post("/api/appointments", authMiddleware, async (req, res) => {
       });
     }
 
-    //Check doctor exists
     const doctor = await Doctor.findById(doctorId);
     if (!doctor) {
       return res.status(404).json({ message: "Doctor not found" });
     }
 
-    // ================= STEP 1: CHECK SLOT FIRST =================
+    // ================= STEP 1: SLOT CHECK =================
     const appointments = await Appointment.find({ doctorId, date });
 
     for (let appt of appointments) {
       const existing = convertToMinutes(appt.time);
-      const newTime = convertToMinutes(time);
+      const newTime = convertToMinutes(formattedTime);
 
-      const diff = Math.abs(existing - newTime);
-
-      if (diff < 30) {
+      if (Math.abs(existing - newTime) < 30) {
         return res.status(400).json({
           message: "Slot has already been booked, try different timing"
         });
       }
     }
 
-    // ================= STEP 2: CHECK DOCTOR AVAILABILITY =================
-
+    // ================= STEP 2: AVAILABILITY =================
     if (!doctor.startTime || !doctor.endTime) {
       return res.status(400).json({
         message: "Doctor is unavailable at this time"
       });
     }
 
-    const bookingTime = convertToMinutes(time);
+    const bookingTime = convertToMinutes(formattedTime);
     const startTime = convertToMinutes(doctor.startTime);
     const endTime = convertToMinutes(doctor.endTime);
 
@@ -212,12 +215,12 @@ app.post("/api/appointments", authMiddleware, async (req, res) => {
       });
     }
 
-    // ================= CREATE APPOINTMENT =================
+    // ================= CREATE =================
     const appointment = await Appointment.create({
       userId: req.user.id,
       doctorId,
       date,
-      time,
+      time: formattedTime,
       status: "Booked"
     });
 
@@ -228,7 +231,7 @@ app.post("/api/appointments", authMiddleware, async (req, res) => {
 
   } catch (err) {
     console.log(err);
-    res.status(500).json({ message: "Slot is already book,try with a gap of 30 min" });
+    res.status(500).json({ message: "Booking failed" });
   }
 });
 
