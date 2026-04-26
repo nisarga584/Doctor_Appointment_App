@@ -15,7 +15,7 @@ const allowedOrigins = [
   "https://doctor-appointment-app-topaz-tau.vercel.app",
   "https://doctor-appointment-app-vuyl.vercel.app",
   "https://doctor-appointment-app-b7z8.vercel.app",
-  "https://doctor-appointment-app-7jpf-f7fdwojgm-nisarga-t-a-s-projects.vercel.app"
+  "https://doctor-appointment-app-7jpf.vercel.app"
 ];
 
 const corsOptions = {
