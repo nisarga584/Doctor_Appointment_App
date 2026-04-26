@@ -50,7 +50,9 @@ const Doctor = mongoose.model("Doctor", new mongoose.Schema({
   name: String,
   specialization: String,
   experience: Number,
-  fees: Number
+  fees: Number,
+  startTime: String,   // e.g. "9 AM"
+  endTime: String      // e.g. "5 PM"
 }));
 
 const Appointment = mongoose.model("Appointment", new mongoose.Schema({
@@ -139,31 +141,27 @@ app.get("/api/doctors", async (req, res) => {
 function convertToMinutes(time) {
   if (!time || typeof time !== "string") return null;
 
+  time = time.trim();
+
   if (time.includes("AM") || time.includes("PM")) {
     let [t, modifier] = time.split(" ");
-    if (!t || !modifier) return null;
-
-    let [h, m] = t.split(":");
-    if (!h || !m) return null;
+    let [h, m] = t.includes(":") ? t.split(":") : [t, "00"];
 
     let hours = parseInt(h);
     let minutes = parseInt(m);
-
-    if (isNaN(hours) || isNaN(minutes)) return null;
 
     if (modifier === "PM" && hours !== 12) hours += 12;
     if (modifier === "AM" && hours === 12) hours = 0;
 
     return hours * 60 + minutes;
-  } else {
-    let [h, m] = time.split(":");
-    let hours = parseInt(h);
-    let minutes = parseInt(m);
-
-    if (isNaN(hours) || isNaN(minutes)) return null;
-
-    return hours * 60 + minutes;
   }
+
+  if (time.includes(":")) {
+    let [h, m] = time.split(":");
+    return parseInt(h) * 60 + parseInt(m);
+  }
+
+  return parseInt(time) * 60;
 }
 
 // ================= BOOK APPOINTMENT =================
@@ -175,39 +173,38 @@ app.post("/api/appointments", authMiddleware, async (req, res) => {
       return res.status(400).json({ message: "Invalid time selected" });
     }
 
-    // Normalize time
+    // ✅ Normalize time
     let formattedTime = time.trim();
-    if (!formattedTime.includes("AM") && !formattedTime.includes("PM")) {
+
+    if (!formattedTime.includes(":") && !formattedTime.includes("AM") && !formattedTime.includes("PM")) {
+      let hour = parseInt(formattedTime);
+      formattedTime = hour >= 12 ? `${hour}:00 PM` : `${hour}:00 AM`;
+    } else if (!formattedTime.includes("AM") && !formattedTime.includes("PM")) {
       let [h, m] = formattedTime.split(":");
       let hour = parseInt(h);
       formattedTime = hour >= 12 ? `${hour}:${m} PM` : `${hour}:${m} AM`;
     }
 
+    // ✅ Prevent past date
     const selectedDate = new Date(date);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     selectedDate.setHours(0, 0, 0, 0);
 
     if (selectedDate < today) {
-      return res.status(400).json({
-        message: "Cannot book past dates"
-      });
+      return res.status(400).json({ message: "Cannot book past dates" });
     }
 
+    // ✅ Check doctor
     const doctor = await Doctor.findById(doctorId);
     if (!doctor) {
       return res.status(404).json({ message: "Doctor not found" });
     }
 
+    // ✅ Convert times
     const bookingTime = convertToMinutes(formattedTime);
-    const startTime = convertToMinutes(doctor.startTime);
-    const endTime = convertToMinutes(doctor.endTime);
-
-    if (bookingTime === null || startTime === null || endTime === null) {
-      return res.status(400).json({
-        message: "Invalid time format"
-      });
-    }
+    let startTime = convertToMinutes(doctor.startTime || "9 AM");
+    let endTime = convertToMinutes(doctor.endTime || "5 PM");
 
     // ================= STEP 1: SLOT CHECK =================
     const appointments = await Appointment.find({ doctorId, date });
@@ -215,7 +212,7 @@ app.post("/api/appointments", authMiddleware, async (req, res) => {
     for (let appt of appointments) {
       const existing = convertToMinutes(appt.time);
 
-      if (existing !== null && Math.abs(existing - bookingTime) < 30) {
+      if (Math.abs(existing - bookingTime) < 30) {
         return res.status(400).json({
           message: "Slot has already been booked, try different timing"
         });
@@ -223,12 +220,6 @@ app.post("/api/appointments", authMiddleware, async (req, res) => {
     }
 
     // ================= STEP 2: AVAILABILITY =================
-    if (!doctor.startTime || !doctor.endTime) {
-      return res.status(400).json({
-        message: "Doctor is unavailable at this time"
-      });
-    }
-
     if (bookingTime < startTime || bookingTime >= endTime) {
       return res.status(400).json({
         message: "Doctor is unavailable at this time"
