@@ -198,10 +198,10 @@ app.post("/api/appointments", authMiddleware, async (req, res) => {
 
     // ❗ FIX: 30-minute rule message
     const appointments = await Appointment.find({ doctorId, date });
-
+    Appointment.find({doctorId,date});
     for (let appt of appointments) {
       const existing = convertToMinutes(appt.time);
-      const diff = Math.abs(existing - bookingTime);
+      const diff = Math.abs(existing - convertToMinutes(time));
 
       if (diff < 30) {
         return res.status(400).json({
@@ -209,7 +209,21 @@ app.post("/api/appointments", authMiddleware, async (req, res) => {
         });
       }
     }
+    if (!doctor.startTime || !doctor.endTime) {
+  return res.status(400).json({
+    message: "Doctor is unavailable at this time"
+  });
+}
 
+const bookingTime = convertToMinutes(time);
+const startTime = convertToMinutes(doctor.startTime);
+const endTime = convertToMinutes(doctor.endTime);
+
+if (bookingTime < startTime || bookingTime >= endTime) {
+  return res.status(400).json({
+    message: "Doctor is unavailable at this time"
+  });
+}
     //Create appointment
     const appointment = await Appointment.create({
       userId: req.user.id,
