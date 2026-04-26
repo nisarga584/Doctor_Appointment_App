@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 
-// ✅ ADD THIS (MAIN FIX)
+// Backend URL
 const API = "https://doctor-appointment-app-z2q8.onrender.com";
 
 function Appointments({ token }) {
@@ -9,13 +9,13 @@ function Appointments({ token }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const storedToken = token || localStorage.getItem("token");
+
   // ================= FETCH APPOINTMENTS =================
   const fetchAppointments = async () => {
     try {
       setLoading(true);
       setError("");
-
-      const storedToken = token || localStorage.getItem("token");
 
       const res = await axios.get(`${API}/api/appointments`, {
         headers: {
@@ -23,9 +23,7 @@ function Appointments({ token }) {
         },
       });
 
-      console.log("Appointments:", res.data);
-
-      setAppointments(res.data);
+      setAppointments(res.data || []);
     } catch (error) {
       console.log("Fetch error:", error?.response?.data || error.message);
 
@@ -33,6 +31,8 @@ function Appointments({ token }) {
         error?.response?.data?.message ||
         "Failed to load appointments"
       );
+
+      setAppointments([]);
     } finally {
       setLoading(false);
     }
@@ -42,8 +42,6 @@ function Appointments({ token }) {
   const handleCancel = async (id) => {
     try {
       setError("");
-
-      const storedToken = token || localStorage.getItem("token");
 
       await axios.delete(`${API}/api/appointments/${id}`, {
         headers: {
@@ -55,7 +53,7 @@ function Appointments({ token }) {
         prev.filter((appt) => appt._id !== id)
       );
 
-      alert("Appointment cancelled");
+      alert("Appointment cancelled successfully");
 
     } catch (error) {
       console.log("Cancel error:", error?.response?.data || error.message);
@@ -69,13 +67,12 @@ function Appointments({ token }) {
 
   // ================= LOAD DATA =================
   useEffect(() => {
-    const storedToken = token || localStorage.getItem("token");
-
     if (storedToken) {
       fetchAppointments();
     } else {
       setAppointments([]);
       setLoading(false);
+      setError("Please login to view appointments");
     }
   }, [token]);
 
@@ -84,7 +81,7 @@ function Appointments({ token }) {
     <div style={{ padding: 20 }}>
       <h2>My Appointments</h2>
 
-      {!token && !localStorage.getItem("token") ? (
+      {!storedToken ? (
         <p>Please login to view appointments</p>
       ) : loading ? (
         <p>Loading...</p>

@@ -38,9 +38,6 @@ const corsOptions = {
 // ================= MIDDLEWARE =================
 app.use(cors(corsOptions));
 
-// IMPORTANT: handle preflight requests properly
-app.options("*", cors(corsOptions));
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.set("trust proxy", 1);
