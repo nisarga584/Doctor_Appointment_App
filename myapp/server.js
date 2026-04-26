@@ -137,14 +137,19 @@ app.get("/api/doctors", async (req, res) => {
 
 // ================= HELPER FUNCTION =================
 function convertToMinutes(time) {
-  if (!time) return null;
+  if (!time || typeof time !== "string") return null;
 
   if (time.includes("AM") || time.includes("PM")) {
     let [t, modifier] = time.split(" ");
+    if (!t || !modifier) return null;
+
     let [h, m] = t.split(":");
+    if (!h || !m) return null;
 
     let hours = parseInt(h);
     let minutes = parseInt(m);
+
+    if (isNaN(hours) || isNaN(minutes)) return null;
 
     if (modifier === "PM" && hours !== 12) hours += 12;
     if (modifier === "AM" && hours === 12) hours = 0;
@@ -152,7 +157,12 @@ function convertToMinutes(time) {
     return hours * 60 + minutes;
   } else {
     let [h, m] = time.split(":");
-    return parseInt(h) * 60 + parseInt(m);
+    let hours = parseInt(h);
+    let minutes = parseInt(m);
+
+    if (isNaN(hours) || isNaN(minutes)) return null;
+
+    return hours * 60 + minutes;
   }
 }
 
@@ -161,11 +171,16 @@ app.post("/api/appointments", authMiddleware, async (req, res) => {
   try {
     const { doctorId, date, time } = req.body;
 
-    // 🔥 FIX: normalize time format
-    let formattedTime = time;
-    if (!time.includes("AM") && !time.includes("PM")) {
-      let hour = parseInt(time.split(":")[0]);
-      formattedTime = hour >= 12 ? time + " PM" : time + " AM";
+    if (!time) {
+      return res.status(400).json({ message: "Invalid time selected" });
+    }
+
+    // Normalize time
+    let formattedTime = time.trim();
+    if (!formattedTime.includes("AM") && !formattedTime.includes("PM")) {
+      let [h, m] = formattedTime.split(":");
+      let hour = parseInt(h);
+      formattedTime = hour >= 12 ? `${hour}:${m} PM` : `${hour}:${m} AM`;
     }
 
     const selectedDate = new Date(date);
@@ -184,14 +199,23 @@ app.post("/api/appointments", authMiddleware, async (req, res) => {
       return res.status(404).json({ message: "Doctor not found" });
     }
 
+    const bookingTime = convertToMinutes(formattedTime);
+    const startTime = convertToMinutes(doctor.startTime);
+    const endTime = convertToMinutes(doctor.endTime);
+
+    if (bookingTime === null || startTime === null || endTime === null) {
+      return res.status(400).json({
+        message: "Invalid time format"
+      });
+    }
+
     // ================= STEP 1: SLOT CHECK =================
     const appointments = await Appointment.find({ doctorId, date });
 
     for (let appt of appointments) {
       const existing = convertToMinutes(appt.time);
-      const newTime = convertToMinutes(formattedTime);
 
-      if (Math.abs(existing - newTime) < 30) {
+      if (existing !== null && Math.abs(existing - bookingTime) < 30) {
         return res.status(400).json({
           message: "Slot has already been booked, try different timing"
         });
@@ -204,10 +228,6 @@ app.post("/api/appointments", authMiddleware, async (req, res) => {
         message: "Doctor is unavailable at this time"
       });
     }
-
-    const bookingTime = convertToMinutes(formattedTime);
-    const startTime = convertToMinutes(doctor.startTime);
-    const endTime = convertToMinutes(doctor.endTime);
 
     if (bookingTime < startTime || bookingTime >= endTime) {
       return res.status(400).json({
