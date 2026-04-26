@@ -228,7 +228,7 @@ app.post("/api/appointments", authMiddleware, async (req, res) => {
 
   } catch (err) {
     console.log(err);
-    res.status(500).json({ message: "Booking failed" });
+    res.status(500).json({ message: "Slot is already book,try with a gap of 30 min" });
   }
 });
 
